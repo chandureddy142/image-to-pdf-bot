@@ -93,5 +93,14 @@ async def main():
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # No running event loop
+        loop = None
+
+    if loop and loop.is_running():
+        # If a loop is already running, use `create_task`
+        loop.create_task(main())
+    else:
+        # Otherwise, start a new event loop
+        asyncio.run(main())
