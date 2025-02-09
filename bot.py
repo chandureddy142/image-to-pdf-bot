@@ -96,12 +96,7 @@ if __name__ == "__main__":
     import asyncio
 
     loop = asyncio.get_event_loop()
+    loop.create_task(main())  # Schedule bot startup
+    loop.run_forever()  # Keep the loop alive
 
-    try:
-        loop.run_until_complete(main())
-        loop.run_forever()  # Keep the bot running
-    except KeyboardInterrupt:
-        print("Bot stopped by user.")
-    finally:
-        loop.close()
 
