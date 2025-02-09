@@ -4,9 +4,8 @@ import asyncio
 import img2pdf
 from PIL import Image
 from telegram import Update
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler, filters, CallbackContext
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from flask import Flask
 
 # Load bot token from environment variables
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -23,11 +22,16 @@ os.makedirs(IMG_DIR, exist_ok=True)
 # Dictionary to store user images
 user_images = {}
 
+# Flask app to keep Render service alive
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
 
 async def start(update: Update, context: CallbackContext):
     """Send a welcome message."""
     await update.message.reply_text("📷 Send me images, and I'll convert them into a PDF! Use /convert when you're ready.")
-
 
 async def handle_image(update: Update, context: CallbackContext):
     """Handle incoming images."""
@@ -37,17 +41,16 @@ async def handle_image(update: Update, context: CallbackContext):
 
     # File path
     file_path = os.path.join(IMG_DIR, f"{chat_id}_{photo.file_id}.jpg")
-    
+
     # Download the image
     await file.download_to_drive(file_path)
-    
+
     # Store file path in user's list
     if chat_id not in user_images:
         user_images[chat_id] = []
     user_images[chat_id].append(file_path)
-    
-    await update.message.reply_text("✅ Image saved! Send more or use /convert to generate a PDF.")
 
+    await update.message.reply_text("✅ Image saved! Send more or use /convert to generate a PDF.")
 
 async def convert_to_pdf(update: Update, context: CallbackContext):
     """Convert images to a single PDF."""
@@ -56,7 +59,7 @@ async def convert_to_pdf(update: Update, context: CallbackContext):
     if chat_id not in user_images or not user_images[chat_id]:
         await update.message.reply_text("⚠️ No images found! Please send some images first.")
         return
-    
+
     pdf_path = os.path.join(IMG_DIR, f"{chat_id}.pdf")
 
     try:
@@ -66,7 +69,7 @@ async def convert_to_pdf(update: Update, context: CallbackContext):
 
         # Send PDF to user
         await update.message.reply_document(document=open(pdf_path, "rb"), filename="converted.pdf")
-        
+
         # Cleanup
         for img in user_images[chat_id]:
             os.remove(img)
@@ -79,24 +82,25 @@ async def convert_to_pdf(update: Update, context: CallbackContext):
         logger.error(f"Error converting PDF: {e}")
         await update.message.reply_text("❌ An error occurred while generating the PDF.")
 
-    
 async def main():
     """Start the bot."""
-    app = Application.builder().token(TOKEN).build()
+    bot_app = Application.builder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_image))
-    app.add_handler(CommandHandler("convert", convert_to_pdf))
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(MessageHandler(filters.PHOTO, handle_image))
+    bot_app.add_handler(CommandHandler("convert", convert_to_pdf))
 
     logger.info("Bot is running...")
-    await app.run_polling()
 
+    # Start bot in a separate task
+    asyncio.create_task(bot_app.run_polling())
 
 if __name__ == "__main__":
-    import asyncio
+    import threading
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())  # Schedule bot startup
-    loop.run_forever()  # Keep the loop alive
+    # Start Telegram bot in a separate thread
+    bot_thread = threading.Thread(target=asyncio.run, args=(main(),))
+    bot_thread.start()
 
-
+    # Start Flask server
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
