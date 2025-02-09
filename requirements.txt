@@ -2,3 +2,4 @@ python-telegram-bot
 pillow
 img2pdf
 Flask
+gunicorn
