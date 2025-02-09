@@ -1,11 +1,10 @@
 import os
 import logging
-import asyncio
 import img2pdf
 from telegram import Update
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler, filters, CallbackContext
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from flask import Flask, request
+import threading
 
 # Load bot token from environment variables
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -22,9 +21,12 @@ os.makedirs(IMG_DIR, exist_ok=True)
 user_images = {}
 
 # Declare the private channel ID or username
-CHANNEL_ID = "-1002295027859"  # Replace with your actual channel ID or @username
+CHANNEL_ID = "@your_private_channel_name"  # Replace with your actual channel ID or @username
 
-# Command to start the bot and send a welcome message
+# Flask app initialization
+app = Flask(__name__)
+
+# The command to start the bot
 async def start(update: Update, context: CallbackContext):
     """Send a welcome message."""
     await update.message.reply_text("📷 Send me images, and I'll upload them to a private channel and convert them into a PDF! Use /convert when you're ready.")
@@ -85,8 +87,14 @@ async def convert_to_pdf(update: Update, context: CallbackContext):
         logger.error(f"Error converting PDF: {e}")
         await update.message.reply_text("❌ An error occurred while generating the PDF.")
 
+# Flask route to start the bot
+@app.route('/')
+def home():
+    """Flask route to check server status."""
+    return "Bot is running!"
+
 # Main function to start the bot
-async def main():
+def start_bot():
     """Start the bot."""
     app = Application.builder().token(TOKEN).build()
 
@@ -96,8 +104,16 @@ async def main():
     app.add_handler(CommandHandler("convert", convert_to_pdf))
 
     logger.info("Bot is running...")
-    await app.run_polling()
+    app.run_polling()
+
+# Start the Flask app in a separate thread
+def run_flask():
+    app.run(host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    # Start Flask in one thread
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    # Start the bot in another thread
+    start_bot()
