@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+import threading
 import img2pdf
 from PIL import Image
 from telegram import Update
@@ -11,8 +12,10 @@ from flask import Flask
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # Set up logging
-logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s",
-                    level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
 logger = logging.getLogger(__name__)
 
 # Temporary storage for images
@@ -22,7 +25,7 @@ os.makedirs(IMG_DIR, exist_ok=True)
 # Dictionary to store user images
 user_images = {}
 
-# Flask app to keep Render service alive
+# Flask app to keep Render web service alive
 app = Flask(__name__)
 
 @app.route('/')
@@ -82,8 +85,8 @@ async def convert_to_pdf(update: Update, context: CallbackContext):
         logger.error(f"Error converting PDF: {e}")
         await update.message.reply_text("❌ An error occurred while generating the PDF.")
 
-async def main():
-    """Start the bot."""
+async def run_bot():
+    """Start the Telegram bot."""
     bot_app = Application.builder().token(TOKEN).build()
 
     bot_app.add_handler(CommandHandler("start", start))
@@ -92,15 +95,19 @@ async def main():
 
     logger.info("Bot is running...")
 
-    # Start bot in a separate task
-    asyncio.create_task(bot_app.run_polling())
+    await bot_app.run_polling()
+
+def start_bot():
+    """Run the bot asynchronously in a separate thread."""
+    asyncio.run(run_bot())
 
 if __name__ == "__main__":
-    import threading
-
     # Start Telegram bot in a separate thread
-    bot_thread = threading.Thread(target=asyncio.run, args=(main(),))
+    bot_thread = threading.Thread(target=start_bot, daemon=True)
     bot_thread.start()
 
+    # Get Render-assigned port (default to 10000 if not set)
+    PORT = int(os.environ.get("PORT", 10000))
+
     # Start Flask server
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=PORT)
